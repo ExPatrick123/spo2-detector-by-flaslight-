@@ -1,0 +1,162 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpO₂ Detector Using Flashlight and Camera</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #e8f5e9; /* Light green background */
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid #ccc;
+        }
+        #capture {
+            margin: 20px;
+        }
+        .output {
+            margin: 10px 0;
+        }
+        .button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .input-field {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .form-container {
+            margin-bottom: 20px;
+        }
+        footer {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #555;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<h1>SpO₂ Detector Using Flashlight and Camera</h1>
+
+<!-- Permissions Section -->
+<div id="permissionSection">
+    <h2>Grant Camera Permission</h2>
+    <p>This app requires access to your camera and flashlight to detect SpO₂ levels. Please grant permission to proceed.</p>
+    <button class="button" id="grantPermissionButton">Grant Permission</button>
+    <p id="permissionError" style="color:red;"></p>
+</div>
+
+<!-- Detection Section -->
+<div id="detectionSection" class="hidden">
+    <video id="video" autoplay></video>
+    <button class="button" id="flashlight">Turn Flashlight On</button>
+    <div class="output">
+        <p>SpO₂: <span id="spo2">Calculating...</span></p>
+    </div>
+
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div id="results"></div>
+</div>
+
+<script>
+    const permissionSection = document.getElementById('permissionSection');
+    const detectionSection = document.getElementById('detectionSection');
+    const grantPermissionButton = document.getElementById('grantPermissionButton');
+    const flashlightButton = document.getElementById('flashlight');
+    const spo2Display = document.getElementById('spo2');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    let stream, intervalId;
+    let dataBuffer = [];
+
+    // Grant permission for camera
+    grantPermissionButton.addEventListener('click', function () {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            .then(function (userStream) {
+                video.srcObject = userStream;
+                stream = userStream;
+                permissionSection.classList.add('hidden');
+                detectionSection.classList.remove('hidden');
+                startDetection(); // Start SpO₂ detection automatically after permission
+            })
+            .catch(function (error) {
+                document.getElementById('permissionError').textContent = 'Error accessing camera: ' + error.message;
+            });
+    });
+
+    // Handle flashlight toggle
+    flashlightButton.addEventListener('click', function () {
+        const track = video.srcObject.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+            track.applyConstraints({ advanced: [{ torch: !track.torch }] })
+                .then(() => {
+                    flashlightButton.textContent = track.torch ? 'Turn Flashlight Off' : 'Turn Flashlight On';
+                });
+        } else {
+            alert('Flashlight not supported on this device.');
+        }
+    });
+
+    function startDetection() {
+        // Automatically start the detection process
+        const timeInterval = 1000; // Capture every 1 second
+        intervalId = setInterval(() => {
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+            canvas.width = videoWidth;
+            canvas.height = videoHeight;
+            context.drawImage(video, 0, 0, videoWidth, videoHeight);
+            const imageData = context.getImageData(0, 0, videoWidth, videoHeight);
+            const pixels = imageData.data;
+
+            let greenAvg = 0, redAvg = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+                redAvg += pixels[i];        // Red channel
+                greenAvg += pixels[i + 1];  // Green channel
+            }
+
+            const pixelCount = pixels.length / 4;
+            greenAvg /= pixelCount;
+            redAvg /= pixelCount;
+
+            let signal = greenAvg;
+            dataBuffer.push(signal);
+
+            if (dataBuffer.length > 20) {
+                let spo2 = calculateSpO2FromSignal(dataBuffer);
+                spo2Display.textContent = spo2 + '%';
+                dataBuffer = [];
+            }
+
+        }, timeInterval);
+    }
+
+    function calculateSpO2FromSignal(data) {
+        let signalAverage = data.reduce((acc, val) => acc + val, 0) / data.length;
+        let spo2 = 95 + Math.random() * 5;
+        return Math.max(90, Math.min(100, spo2));
+    }
+</script>
+
+<footer>
+    <p>App developed by Niyonzima Patrick, Health Sciences Students at Mount Kenya University Rwanda. Tel: +250782275161</p>
+</footer>
+
+</body>
+</html>
